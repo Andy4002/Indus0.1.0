@@ -1,7 +1,7 @@
 Added the first Commit
 
 
-![frontend](./Front-end.png)
+![frontend](./Front-end.jpg)
 
 
 
