@@ -57,7 +57,25 @@ class Uploader extends EventEmitter {
       });
   }
 }
-
+  async loadNext() {
+    if (this.busy) return;
+    this.busy = true;
+    this.page++;
+    try {
+      const res = await fetch(`/api/media?page=${this.page}`);
+      if (!res.ok) throw new Error('Failed to load gallery');
+      const { items } = await res.json();
+      items.forEach(item => {
+        const card = new MediaCard(item);
+        this.grid.appendChild(card.render());
+      });
+    } catch (err) {
+      console.error(err);
+    } finally {
+      this.busy = false;
+    }
+  }
+}
 class Previewer {
   constructor(canvas, video) {
     this.canvas = canvas;
@@ -118,25 +136,7 @@ class Gallery {
     this.page = 0;
     this.busy = false;
   }
-  async loadNext() {
-    if (this.busy) return;
-    this.busy = true;
-    this.page++;
-    try {
-      const res = await fetch(`/api/media?page=${this.page}`);
-      if (!res.ok) throw new Error('Failed to load gallery');
-      const { items } = await res.json();
-      items.forEach(item => {
-        const card = new MediaCard(item);
-        this.grid.appendChild(card.render());
-      });
-    } catch (err) {
-      console.error(err);
-    } finally {
-      this.busy = false;
-    }
-  }
-}
+
 
 const config = new ConfigManager();
 const uploader = new Uploader(document.getElementById('upload-form'));
