@@ -1,0 +1,557 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Indus — Offline Explorer</title>
+  <meta name="description" content="Indus — an offline-first map and navigation assistant for exploring the Indus Valley." />
+  <style>
+    /* ----- Reset & basic layout ----- */
+    :root{
+      --bg:#0f1724;
+      --card:#0b1220;
+      --accent:#60a5fa;
+      --muted:#9aa8bd;
+      --glass: rgba(255,255,255,0.03);
+      --success:#34d399;
+      --danger:#fb7185;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0;background:linear-gradient(180deg,#041025 0%, #071227 100%);color:#eef2ff}
+    a{color:var(--accent)}
+
+    header{
+      display:flex;align-items:center;gap:12px;padding:18px 22px;border-bottom:1px solid rgba(255,255,255,0.03);
+      backdrop-filter: blur(6px);position:sticky;top:0;z-index:40;background:linear-gradient(180deg, rgba(6,10,18,0.6), rgba(6,10,18,0.3));
+    }
+    header .brand{
+      display:flex;align-items:center;gap:12px;font-weight:700;font-size:18px;letter-spacing:0.4px
+    }
+    header .brand .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(120deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;font-weight:800;color:#021129}
+
+    .app{
+      display:grid;grid-template-columns:360px 1fr;gap:18px;padding:18px;max-width:1400px;margin:12px auto;width:calc(100% - 48px);
+    }
+
+    /* Sidebar */
+    .sidebar{
+      background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,0.03);height:calc(100vh - 128px);overflow:auto
+    }
+    .card{background:var(--card);border-radius:10px;padding:12px;margin-bottom:12px;border:1px solid rgba(255,255,255,0.02)}
+    .muted{color:var(--muted);font-size:13px}
+
+    .controls .row{display:flex;gap:8px;margin-bottom:10px}
+    .btn{padding:8px 10px;border-radius:8px;border:0;background:linear-gradient(90deg,var(--accent),#7c3aed);color:#021129;font-weight:600;cursor:pointer}
+    .btn.secondary{background:transparent;border:1px solid rgba(255,255,255,0.04);color:var(--muted);font-weight:600}
+    .small{font-size:13px;padding:6px 8px}
+    input[type=text],select{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit}
+
+    .poi-list{max-height:220px;overflow:auto}
+    .poi-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;cursor:pointer}
+    .poi-item:hover{background:rgba(255,255,255,0.02)}
+
+    /* Map area */
+    .mapwrap{position:relative;border-radius:12px;overflow:hidden;height:calc(100vh - 128px);border:1px solid rgba(255,255,255,0.03)}
+    canvas#map{display:block;width:100%;height:100%}
+
+    /* Bottom overlay */
+    .bottom-panel{position:absolute;left:12px;bottom:12px;background:var(--glass);backdrop-filter:blur(8px);padding:10px;border-radius:10px;border:1px solid rgba(255,255,255,0.04)}
+    .gps-indicator{display:flex;align-items:center;gap:10px}
+    .dot{width:10px;height:10px;border-radius:50%}
+    .dot.green{background:var(--success)}
+    .dot.red{background:var(--danger)}
+
+    /* Responsive */
+    @media (max-width:1000px){.app{grid-template-columns:1fr;}.sidebar{height:auto;}}
+
+    /* Fancy markers */
+    .marker-label{font-weight:700;font-size:12px;padding:6px 8px;border-radius:8px;background:rgba(2,6,12,0.6);border:1px solid rgba(255,255,255,0.03)}
+
+    /* small helper */
+    .muted-2{color:#b6c2d1;font-size:12px}
+    .fileinput{display:flex;gap:8px;align-items:center}
+    footer{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">I</div>
+      <div>
+        Indus <div class="muted" style="font-weight:500;font-size:12px">Offline Explorer — Indus Valley Navigation</div>
+      </div>
+    </div>
+    <div style="margin-left:auto" class="muted">Works fully offline — import GPX / GeoJSON • breadcrumb logging • offline search</div>
+  </header>
+
+  <main class="app">
+    <aside class="sidebar">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:800">Quick navigator</div>
+            <div class="muted" style="font-size:13px">Use your device GPS to follow routes offline</div>
+          </div>
+          <div style="text-align:right">
+            <div id="zoomLevel" class="muted">Zoom: 1.00x</div>
+          </div>
+        </div>
+
+        <div class="controls" style="margin-top:12px">
+          <div class="row">
+            <input type="text" id="searchBox" placeholder="Search points of interest (eg. Mohenjo-daro)" />
+            <button class="btn small" id="searchBtn">Search</button>
+          </div>
+          <div style="display:flex;gap:8px">
+            <button class="btn small" id="locateBtn">Locate Me</button>
+            <button class="btn secondary small" id="followBtn">Start Track</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-weight:700">Points of interest</div>
+          <div class="muted-2">Built-in dataset</div>
+        </div>
+        <div class="poi-list" id="poiList"></div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:8px">Route tools</div>
+        <div class="muted-2" style="margin-bottom:8px">Tap POIs or drop pins on the map to create a route.</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn small" id="routeBtn">Create Route</button>
+          <button class="btn secondary small" id="clearRouteBtn">Clear Route</button>
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn small" id="exportBtn">Export GeoJSON</button>
+          <button class="btn secondary small" id="importBtn">Import</button>
+        </div>
+        <div class="fileinput" style="margin-top:6px;">
+          <input type="file" id="fileInput" accept=".gpx,.geojson,.json" />
+          <div class="muted-2">GPX/GeoJSON import for offline routes</div>
+        </div>
+      </div>
+
+      <div class="card" id="trackCard">
+        <div style="font-weight:700;margin-bottom:8px">Track & Breadcrumbs</div>
+        <div class="muted-2" style="margin-bottom:8px">Records your path while 'Start Track' is active. Stored locally.</div>
+        <div style="display:flex;gap:8px;margin-bottom:8px">
+          <button class="btn small" id="saveTrackBtn">Save Track</button>
+          <button class="btn secondary small" id="clearTrackBtn">Clear</button>
+        </div>
+        <div style="font-size:13px" id="trackInfo">Points: 0 • Length: 0 m</div>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:700;margin-bottom:6px">Offline data</div>
+        <div class="muted-2" style="margin-bottom:8px">Preloaded POIs & sample map layers are embedded. You can add more by importing GeoJSON.</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn small" id="downloadSample">Download Sample GeoJSON</button>
+          <button class="btn secondary small" id="clearLocal">Clear Local Data</button>
+        </div>
+      </div>
+
+      <div class="card muted-2" style="font-size:13px">
+        Pro tip: To use the service worker as intended run the file from a local server (python -m http.server) or host with HTTPS. GPS & device sensors work offline.
+      </div>
+    </aside>
+
+    <section class="mapwrap">
+      <canvas id="map"></canvas>
+      <div class="bottom-panel">
+        <div class="gps-indicator">
+          <div id="gpsDot" class="dot red" title="GPS status"></div>
+          <div>
+            <div id="gpsText">No GPS</div>
+            <div class="muted-2" id="coordText">—</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>Indus • Offline Explorer — Sample dataset includes famous Indus Valley archaeological sites for demo purposes.</footer>
+
+  <script>
+    /* -----------------------------
+       Offline-friendly Indus Explorer
+       - Canvas vector map with pan/zoom
+       - Built-in POIs (sample Indus Valley sites)
+       - Import/Export GeoJSON & GPX (basic)
+       - Track/breadcrumb logging in localStorage
+       - Service worker registration
+     ------------------------------*/
+
+    // --- Simple dataset (sample GeoJSON features for Indus Valley sites) ---
+    const samplePOIs = [
+      { id: 'mohenjo', name:'Mohenjo-daro', lat:27.3294, lon:68.1383, type:'site', desc:'Major Indus Valley site (Sindh, Pakistan)'} ,
+      { id: 'harappa', name:'Harappa', lat:30.6333, lon:72.8667, type:'site', desc:'Ancient city (Punjab, Pakistan)'} ,
+      { id: 'dholavira', name:'Dholavira', lat:23.895, lon:70.126, type:'site', desc:'Large Harappan city in Gujarat, India'} ,
+      { id: 'rupar', name:'Ropar (Rupnagar)', lat:31.2130, lon:76.3670, type:'site', desc:'Archaeological site in Punjab, India'} ,
+      { id: 'lothal', name:'Lothal', lat:22.5353, lon:72.3621, type:'site', desc:'Ancient port city in Gujarat, India'}
+    ];
+
+    // Keep core state
+    const state = {
+      pois: [...samplePOIs],
+      map: {cx: 72.5, cy: 27.0, zoom: 4.2}, // center lon/lat and zoom scale
+      dragging: false,
+      dragStart: null,
+      screenStart: null,
+      waypoints: [],
+      breadcrumbs: [],
+      tracking: false,
+      gpsActive: false
+    };
+
+    // Map canvas setup
+    const canvas = document.getElementById('map');
+    const ctx = canvas.getContext('2d');
+
+    function resize(){
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.floor(rect.width * devicePixelRatio);
+      canvas.height = Math.floor(rect.height * devicePixelRatio);
+      ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+      draw();
+    }
+    window.addEventListener('resize',resize);
+
+    // Projection: simple equirectangular for small region
+    function lonToX(lon){
+      return (lon - state.map.cx) * (256 * state.map.zoom);
+    }
+    function latToY(lat){
+      return (state.map.cy - lat) * (256 * state.map.zoom);
+    }
+
+    function screenToGeo(x,y){
+      const rect = canvas.getBoundingClientRect();
+      const cx = rect.width/2; const cy = rect.height/2;
+      const lon = state.map.cx + (x - cx)/(256*state.map.zoom);
+      const lat = state.map.cy - (y - cy)/(256*state.map.zoom);
+      return {lat,lon};
+    }
+
+    function geoToScreen(lon,lat){
+      const rect = canvas.getBoundingClientRect();
+      const cx = rect.width/2; const cy = rect.height/2;
+      const x = cx + lonToX(lon);
+      const y = cy + latToY(lat);
+      return {x,y};
+    }
+
+    // Draw map: background, river line (stylised Indus), POIs, route
+    function draw(){
+      const rect = canvas.getBoundingClientRect();
+      ctx.clearRect(0,0,rect.width,rect.height);
+
+      // base
+      const grd = ctx.createLinearGradient(0,0,0,rect.height);
+      grd.addColorStop(0,'#071427');
+      grd.addColorStop(1,'#082233');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0,0,rect.width,rect.height);
+
+      // latitude/longitude grid
+      drawGrid();
+
+      // draw schematic Indus river (approximate curving path)
+      drawIndusRiver();
+
+      // waypoints and route
+      drawRoute();
+
+      // POIs
+      drawPOIs();
+
+      // breadcrumbs
+      drawBreadcrumbs();
+    }
+
+    function drawGrid(){
+      ctx.save();
+      ctx.globalAlpha = 0.06;
+      ctx.strokeStyle = '#9fb3cc';
+      ctx.lineWidth = 1;
+      const rect = canvas.getBoundingClientRect();
+      // draw lat/lon ticks around center
+      const lonCenter = state.map.cx; const latCenter = state.map.cy;
+      const step = 1/ state.map.zoom; // dynamic density
+      for(let lon = Math.floor(lonCenter-10); lon<=lonCenter+10; lon+=step){
+        const p1 = geoToScreen(lon, latCenter-20);
+        const p2 = geoToScreen(lon, latCenter+20);
+        ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+      }
+      for(let lat = Math.floor(latCenter-10); lat<=latCenter+10; lat+=step){
+        const p1 = geoToScreen(lonCenter-30, lat);
+        const p2 = geoToScreen(lonCenter+30, lat);
+        ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    function drawIndusRiver(){
+      // approximate spline points along the Indus path (very simplified)
+      const points = [
+        [75,33],[74,32.2],[73,31.4],[72.6,30.4],[72.2,29.2],[71.8,28.2],[71.2,27.2],[70.8,26.4],[70.4,25.1],[69.8,24.1],[69.0,23.3],[68.4,22.0],[68.0,21.0]
+      ];
+      ctx.save();
+      ctx.lineJoin = 'round'; ctx.lineCap='round';
+      ctx.strokeStyle = '#63b3ed'; ctx.lineWidth = 6;
+      ctx.beginPath();
+      points.forEach((p,i)=>{
+        const s = geoToScreen(p[0],p[1]);
+        if(i===0) ctx.moveTo(s.x,s.y); else ctx.lineTo(s.x,s.y);
+      })
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPOIs(){
+      ctx.save();
+      ctx.font = '12px Inter'; ctx.textBaseline='middle';
+      state.pois.forEach(p=>{
+        const s = geoToScreen(p.lon,p.lat);
+        // circle
+        ctx.beginPath(); ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.arc(s.x,s.y,6,0,Math.PI*2); ctx.fill();
+        // label
+        ctx.fillStyle = '#021029'; ctx.fillRect(s.x+10-1, s.y-10-1, ctx.measureText(p.name).width+16,22);
+        ctx.fillStyle = '#eef2ff'; ctx.fillText(p.name, s.x+18, s.y);
+      });
+      ctx.restore();
+    }
+
+    function drawRoute(){
+      if(state.waypoints.length===0) return;
+      ctx.save(); ctx.strokeStyle='#ffd166'; ctx.lineWidth=3; ctx.setLineDash([8,6]); ctx.beginPath();
+      state.waypoints.forEach((w,i)=>{
+        const s = geoToScreen(w.lon,w.lat);
+        if(i===0) ctx.moveTo(s.x,s.y); else ctx.lineTo(s.x,s.y);
+      });
+      ctx.stroke(); ctx.restore();
+
+      // draw pins
+      ctx.save();
+      state.waypoints.forEach((w,i)=>{
+        const s = geoToScreen(w.lon,w.lat);
+        ctx.beginPath(); ctx.fillStyle = '#ff7b7b'; ctx.arc(s.x,s.y,7,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle='#021029'; ctx.fillText((i+1), s.x-3, s.y+2);
+      });
+      ctx.restore();
+    }
+
+    function drawBreadcrumbs(){
+      if(state.breadcrumbs.length<2) return;
+      ctx.save(); ctx.strokeStyle='rgba(20,220,150,0.6)'; ctx.lineWidth=2; ctx.beginPath();
+      state.breadcrumbs.forEach((b,i)=>{
+        const s = geoToScreen(b.lon,b.lat);
+        if(i===0) ctx.moveTo(s.x,s.y); else ctx.lineTo(s.x,s.y);
+      });
+      ctx.stroke(); ctx.restore();
+    }
+
+    // --- Map interactions ---
+    canvas.addEventListener('mousedown', (e)=>{
+      state.dragging = true; state.dragStart = {cx:state.map.cx, cy:state.map.cy}; state.screenStart = {x:e.clientX, y:e.clientY};
+    });
+    window.addEventListener('mouseup', ()=>{ state.dragging=false; state.dragStart=null; state.screenStart=null; });
+    window.addEventListener('mousemove', (e)=>{
+      if(!state.dragging) return;
+      const dx = e.clientX - state.screenStart.x; const dy = e.clientY - state.screenStart.y;
+      state.map.cx = state.dragStart.cx - dx/(256*state.map.zoom);
+      state.map.cy = state.dragStart.cy + dy/(256*state.map.zoom);
+      draw();
+    });
+
+    canvas.addEventListener('wheel', (e)=>{
+      e.preventDefault();
+      const delta = -e.deltaY/500;
+      const oldZoom = state.map.zoom;
+      state.map.zoom = Math.max(0.5, Math.min(20, state.map.zoom * (1 + delta)));
+      document.getElementById('zoomLevel').textContent = 'Zoom: '+state.map.zoom.toFixed(2)+'x';
+      draw();
+    },{passive:false});
+
+    // Tap to add waypoint
+    canvas.addEventListener('click', (e)=>{
+      const rect = canvas.getBoundingClientRect();
+      const x = (e.clientX - rect.left); const y = (e.clientY - rect.top);
+      const geo = screenToGeo(x,y);
+      // add waypoint
+      state.waypoints.push({lat: geo.lat, lon: geo.lon});
+      draw();
+    });
+
+    // --- POI list rendering & search ---
+    function renderPoiList(list){
+      const el = document.getElementById('poiList'); el.innerHTML='';
+      list.forEach(p=>{
+        const row = document.createElement('div'); row.className='poi-item';
+        row.innerHTML = `<div><div style=\"font-weight:700\">${p.name}</div><div class=\"muted\">${p.desc}</div></div><div><button class=\"btn small\" data-id=\"${p.id}\">Go</button></div>`;
+        el.appendChild(row);
+      });
+      el.querySelectorAll('button').forEach(btn=>{
+        btn.addEventListener('click', (ev)=>{
+          const id = ev.target.getAttribute('data-id'); const poi = state.pois.find(pp=>pp.id===id);
+          if(!poi) return;
+          state.map.cx = poi.lon; state.map.cy = poi.lat; state.map.zoom = Math.max(2,state.map.zoom); draw();
+        });
+      });
+    }
+    renderPoiList(state.pois);
+
+    document.getElementById('searchBtn').addEventListener('click', ()=>{
+      const q = document.getElementById('searchBox').value.toLowerCase().trim();
+      if(!q){ renderPoiList(state.pois); return; }
+      const results = state.pois.filter(p => (p.name + ' ' + p.desc).toLowerCase().includes(q));
+      renderPoiList(results.length?results:[]);
+    });
+
+    // --- Route tools & import/export ---
+    document.getElementById('clearRouteBtn').addEventListener('click', ()=>{ state.waypoints=[]; draw(); });
+    document.getElementById('routeBtn').addEventListener('click', ()=>{ if(state.waypoints.length<2){alert('Add at least two waypoints by clicking on the map or selecting POIs.');return;} alert('Route created — displayed on the map. Use Export to save as GeoJSON.'); });
+
+    document.getElementById('exportBtn').addEventListener('click', ()=>{
+      const geo = {
+        type:'FeatureCollection', features: state.waypoints.map((w,i)=>({type:'Feature',properties:{index:i+1},geometry:{type:'Point',coordinates:[w.lon,w.lat]}}))
+      };
+      const blob = new Blob([JSON.stringify(geo, null, 2)], {type:'application/geo+json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href=url; a.download='route.geojson'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // Simple GPX parser (very small subset) and GeoJSON import
+    document.getElementById('fileInput').addEventListener('change', async (e)=>{
+      const f = e.target.files[0]; if(!f) return;
+      const txt = await f.text();
+      if(f.name.endsWith('.gpx')){
+        const parser = new DOMParser(); const xml = parser.parseFromString(txt,'application/xml');
+        const trkpts = xml.querySelectorAll('trkpt');
+        const pts = [];
+        trkpts.forEach(n=>{ pts.push({lat:parseFloat(n.getAttribute('lat')), lon:parseFloat(n.getAttribute('lon'))}); });
+        if(pts.length) { state.waypoints = pts; draw(); alert('GPX loaded as waypoints ('+pts.length+' points).'); }
+        else alert('No trackpoints found');
+      } else {
+        try{ const obj = JSON.parse(txt);
+          if(obj.type==='FeatureCollection'){
+            const pts = [];
+            obj.features.forEach(f=>{ if(f.geometry && f.geometry.type==='Point'){ pts.push({lat:f.geometry.coordinates[1], lon:f.geometry.coordinates[0]}); }});
+            if(pts.length){ state.waypoints = pts; draw(); alert('GeoJSON Points loaded as waypoints ('+pts.length+')'); }
+            else alert('No Point features found in GeoJSON');
+          } else alert('Unsupported JSON format');
+        }catch(err){ alert('Invalid file'); }
+      }
+    });
+
+    // import button triggers file input
+    document.getElementById('importBtn').addEventListener('click', ()=>{ document.getElementById('fileInput').click(); });
+
+    // download sample geojson
+    document.getElementById('downloadSample').addEventListener('click', ()=>{
+      const sample = {type:'FeatureCollection', features: state.pois.map(p=>({type:'Feature',properties:{name:p.name,desc:p.desc},geometry:{type:'Point',coordinates:[p.lon,p.lat]}}))};
+      const blob = new Blob([JSON.stringify(sample,null,2)],{type:'application/geo+json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='indus_pois.geojson'; a.click(); URL.revokeObjectURL(url);
+    });
+
+    // --- Tracking / Breadcrumbs ---
+    function storeBreadcrumbs(){ localStorage.setItem('indus_breadcrumbs', JSON.stringify(state.breadcrumbs)); localStorage.setItem('indus_pois', JSON.stringify(state.pois)); }
+    function loadBreadcrumbs(){ const b = localStorage.getItem('indus_breadcrumbs'); if(b) state.breadcrumbs = JSON.parse(b); const p = localStorage.getItem('indus_pois'); if(p) state.pois = JSON.parse(p); }
+    loadBreadcrumbs();
+
+    document.getElementById('followBtn').addEventListener('click', ()=>{
+      state.tracking = !state.tracking; document.getElementById('followBtn').textContent = state.tracking? 'Stop Track':'Start Track';
+      if(state.tracking) startGeolocation();
+    });
+
+    document.getElementById('saveTrackBtn').addEventListener('click', ()=>{
+      if(state.breadcrumbs.length<2){ alert('Not enough points to save'); return; }
+      const geo = {type:'FeatureCollection', features: state.breadcrumbs.map((b,i)=>({type:'Feature',properties:{time:b.t},geometry:{type:'Point',coordinates:[b.lon,b.lat]}}))};
+      const blob = new Blob([JSON.stringify(geo,null,2)],{type:'application/geo+json'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download='track.geojson'; a.click(); URL.revokeObjectURL(url);
+    });
+    document.getElementById('clearTrackBtn').addEventListener('click', ()=>{ state.breadcrumbs=[]; storeBreadcrumbs(); draw(); updateTrackInfo(); });
+
+    function updateTrackInfo(){
+      const pts = state.breadcrumbs.length; let len = 0;
+      for(let i=1;i<state.breadcrumbs.length;i++){ len += haversine(state.breadcrumbs[i-1], state.breadcrumbs[i]); }
+      document.getElementById('trackInfo').textContent = `Points: ${pts} • Length: ${Math.round(len)} m`;
+    }
+
+    // --- Geolocation handling ---
+    let geoWatchId = null;
+    function startGeolocation(){
+      if(!navigator.geolocation){ alert('Geolocation not supported'); return; }
+      if(geoWatchId!==null) return;
+      geoWatchId = navigator.geolocation.watchPosition((pos)=>{
+        const lat = pos.coords.latitude, lon = pos.coords.longitude;
+        state.gpsActive = true; document.getElementById('gpsDot').className='dot green';
+        document.getElementById('gpsText').textContent = 'GPS Active'; document.getElementById('coordText').textContent = `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+        // save breadcrumb if tracking
+        if(state.tracking){ state.breadcrumbs.push({lat,lon,t:Date.now()}); storeBreadcrumbs(); updateTrackInfo(); }
+        // center map modestly
+        state.map.cx = lon; state.map.cy = lat; draw();
+      }, (err)=>{
+        console.warn('geo err',err); state.gpsActive=false; document.getElementById('gpsDot').className='dot red'; document.getElementById('gpsText').textContent = 'GPS unavailable'; document.getElementById('coordText').textContent = `error: ${err.message}`;
+      }, {enableHighAccuracy:true,maximumAge:5000});
+    }
+
+    document.getElementById('locateBtn').addEventListener('click', ()=>{ startGeolocation(); });
+
+    // Haversine distance in meters
+    function haversine(a,b){
+      const R = 6371000; const toRad = x=> x*Math.PI/180;
+      const dLat = toRad(b.lat - a.lat); const dLon = toRad(b.lon - a.lon);
+      const lat1 = toRad(a.lat); const lat2 = toRad(b.lat);
+      const aa = Math.sin(dLat/2)**2 + Math.cos(lat1)*Math.cos(lat2)*Math.sin(dLon/2)**2;
+      const c = 2*Math.atan2(Math.sqrt(aa),Math.sqrt(1-aa));
+      return R*c;
+    }
+
+    // --- Utilities ---
+    function clearLocal(){ localStorage.removeItem('indus_breadcrumbs'); localStorage.removeItem('indus_pois'); state.breadcrumbs=[]; state.pois = [...samplePOIs]; renderPoiList(state.pois); draw(); }
+    document.getElementById('clearLocal').addEventListener('click', ()=>{ if(confirm('Clear local stored data?')) clearLocal(); });
+
+    document.getElementById('clearRouteBtn').addEventListener('click', ()=>{ state.waypoints=[]; draw(); });
+
+    document.getElementById('clearTrackBtn').addEventListener('click', ()=>{ if(confirm('Clear saved track?')){ state.breadcrumbs=[]; storeBreadcrumbs(); draw(); updateTrackInfo(); }});
+
+    // load saved POIs if present
+    (function(){ const p = localStorage.getItem('indus_pois'); if(p){ try{ state.pois = JSON.parse(p); renderPoiList(state.pois);}catch(e){} } draw(); updateTrackInfo(); })();
+
+    // save POIs when window unloads
+    window.addEventListener('beforeunload', ()=>{ storeBreadcrumbs(); });
+
+    // initial resize/draw
+    setTimeout(resize,50);
+
+    // --- Service Worker registration (for offline caching) ---
+    if('serviceWorker' in navigator){
+      navigator.serviceWorker.register('./sw.js').then(reg=>console.log('sw registered',reg)).catch(e=>console.warn('sw failed',e));
+    }
+
+    // --- Small embedded service worker content creation (install-time) ---
+    // Because we are distributing a single file, create a blob for a basic SW and register if possible.
+    (function createAndRegisterInlineSW(){
+      // the code for the SW
+      const swCode = `
+        const CACHE = 'indus-cache-v1';
+        const urls = ['./','./index.html'];
+        self.addEventListener('install', ev => { ev.waitUntil(caches.open(CACHE).then(c=>c.addAll(urls)).then(()=>self.skipWaiting())); });
+        self.addEventListener('activate', ev => { ev.waitUntil(self.clients.claim()); });
+        self.addEventListener('fetch', ev => { ev.respondWith(caches.match(ev.request).then(r=>r||fetch(ev.request).catch(()=>caches.match('./')))); });
+      `;
+      // register as blob-based sw (some browsers don't allow blob sw, but try)
+      try{
+        const blob = new Blob([swCode],{type:'text/javascript'});
+        const url = URL.createObjectURL(blob);
+        navigator.serviceWorker.getRegistration().then(r=>{
+          if(!r) navigator.serviceWorker.register(url).then(()=>console.log('inline sw registered')).catch(()=>{});
+        });
+      }catch(e){/* silent */}
+    })();
+
+  </script>
+</body>
+</html>
