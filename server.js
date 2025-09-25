@@ -111,13 +111,6 @@ class MediaCard {
     countEl.textContent = count;
     fetch(`/api/media/${this.data.id}/like`, { method: 'POST' });
   }
-  download() {
-    const a = document.createElement('a');
-    a.href = this.data.url;
-    a.download = this.data.filename || 'download';
-    a.click();
-  }
-}
 
 class Gallery {
   constructor(gridEl) {
