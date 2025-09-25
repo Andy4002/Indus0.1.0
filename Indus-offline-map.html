@@ -34,6 +34,28 @@
       display:grid;grid-template-columns:360px 1fr;gap:18px;padding:18px;max-width:1400px;margin:12px auto;width:calc(100% - 48px);
     }
 
+    /* Responsive */
+    @media (max-width:1000px){.app{grid-template-columns:1fr;}.sidebar{height:auto;}}
+
+    /* Fancy markers */
+    .marker-label{font-weight:700;font-size:12px;padding:6px 8px;border-radius:8px;background:rgba(2,6,12,0.6);border:1px solid rgba(255,255,255,0.03)}
+
+    /* small helper */
+    .muted-2{color:#b6c2d1;font-size:12px}
+    .fileinput{display:flex;gap:8px;align-items:center}
+    footer{padding:18px;text-align:center;color:var(--muted);font-size:13px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">I</div>
+      <div>
+        Indus <div class="muted" style="font-weight:500;font-size:12px">Offline Explorer — Indus Valley Navigation</div>
+      </div>
+    </div>
+    <div style="margin-left:auto" class="muted">Works fully offline — import GPX / GeoJSON • breadcrumb logging • offline search</div>
+  </header>
     /* Sidebar */
     .sidebar{
       background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));border-radius:12px;padding:14px;border:1px solid rgba(255,255,255,0.03);height:calc(100vh - 128px);overflow:auto
@@ -61,30 +83,6 @@
     .dot{width:10px;height:10px;border-radius:50%}
     .dot.green{background:var(--success)}
     .dot.red{background:var(--danger)}
-
-    /* Responsive */
-    @media (max-width:1000px){.app{grid-template-columns:1fr;}.sidebar{height:auto;}}
-
-    /* Fancy markers */
-    .marker-label{font-weight:700;font-size:12px;padding:6px 8px;border-radius:8px;background:rgba(2,6,12,0.6);border:1px solid rgba(255,255,255,0.03)}
-
-    /* small helper */
-    .muted-2{color:#b6c2d1;font-size:12px}
-    .fileinput{display:flex;gap:8px;align-items:center}
-    footer{padding:18px;text-align:center;color:var(--muted);font-size:13px}
-  </style>
-</head>
-<body>
-  <header>
-    <div class="brand">
-      <div class="logo">I</div>
-      <div>
-        Indus <div class="muted" style="font-weight:500;font-size:12px">Offline Explorer — Indus Valley Navigation</div>
-      </div>
-    </div>
-    <div style="margin-left:auto" class="muted">Works fully offline — import GPX / GeoJSON • breadcrumb logging • offline search</div>
-  </header>
-
   <main class="app">
     <aside class="sidebar">
       <div class="card">
