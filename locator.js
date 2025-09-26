@@ -17,12 +17,3 @@ function showMap(position) {
     attribution: '© OpenStreetMap contributors'
   }).addTo(map);
 
-  // Add a marker at the user's location
-  L.marker([lat, lon]).addTo(map)
-    .bindPopup("You are here!")
-    .openPopup();
-}
-
-function showError(error) {
-  alert("Error getting location: " + error.message);
-}
