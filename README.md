@@ -1,8 +1,7 @@
-Added the first Commit
+_Indus is an upcoming python based service that provides a unified toolbelt to navigate along the Indus valley, India, providing quirks and trivia along the way._
 
-
+## Preview
 ![frontend](./Front-end.jpg)
 
 
-
-MAintained by @afan4, @Andy4002, @rohan034
+Maintained by @afan4, @Andy4002, @rohan034
